@@ -1,17 +1,10 @@
 import cv2
 import pytesseract
 import numpy as np
+import re
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
-# Fonction pour extraire un champ spécifique à partir du texte OCR
-def extract_field(text, field_name, line_offset=0, reverse=False):
-    lines = text.split('\n')
-    for i, line in enumerate(lines):
-        if field_name in line:
-            return lines[i + line_offset] if not reverse else lines[i - 1]
-    return ""
 
 @app.route('/process_image', methods=['POST'])
 def process_image():
@@ -21,27 +14,48 @@ def process_image():
         image = np.frombuffer(file.read(), np.uint8)
         image = cv2.imdecode(image, cv2.IMREAD_COLOR)
 
-        # Étape 1 : Prétraitement (conversion en gris, amélioration du contraste)
+        # Étape 1 : Prétraitement
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        gray = clahe.apply(gray)
-        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                       cv2.THRESH_BINARY, 11, 2)
+        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)  # Augmenter la résolution
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)  # Réduction du bruit
+        _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        # Étape 2 : Utilisation de pytesseract pour extraire le texte
-        text = pytesseract.image_to_string(thresh, lang="fra")  # Utilisez 'fra' pour français
-        print("Texte extrait:", text)  # Debug
+        # Détection des contours pour isoler les blocs de texte
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        mask = np.zeros_like(binary)
 
-        # Étape 3 : Extraction des champs spécifiques à partir du texte OCR
+        # Filtrer les contours par taille pour capturer les zones de texte pertinentes
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            if 50 < w < 1000 and 10 < h < 200:  # Seuils à ajuster selon les dimensions du texte
+                mask[y:y + h, x:x + w] = 255
+
+        filtered = cv2.bitwise_and(gray, gray, mask=mask)
+
+        # Étape 2 : OCR
+        custom_config = r'--oem 3 --psm 6'
+        text = pytesseract.image_to_string(filtered, lang="fra", config=custom_config)
+
+        # Sauvegarde pour debug
+        with open("extracted_text_debug.txt", "w", encoding="utf-8") as f:
+            f.write(text)
+        print("Texte extrait par OCR :", text)  # Debug
+
+        # Étape 3 : Extraction des données avec regex
+        cin_pattern = re.search(r'[A-Z]{2}\d{6}', text)  # Format CIN
+        date_pattern = re.search(r'\d{2}.\d{2}.\d{4}', text)  # Format des dates
+        nom_prenom_pattern = re.findall(r'\b[A-Z]{2,}\b', text)  # Noms et prénoms en majuscules
+
+        # Structuration des résultats
         results = {
-            "nom": extract_field(text, "Nom", line_offset=0),
-            "prenom": extract_field(text, "Nom", line_offset=1),
-            "date_naissance": extract_field(text, "Né le"),
-            "adresse": extract_field(text, "à"),
-            "numero_cin": extract_field(text, "Valable jusqu’au", reverse=True),
+            "nom": nom_prenom_pattern[1] if len(nom_prenom_pattern) > 1 else "",
+            "prenom": nom_prenom_pattern[0] if len(nom_prenom_pattern) > 0 else "",
+            "date_naissance": date_pattern.group(0) if date_pattern else "",
+            "numero_cin": cin_pattern.group(0) if cin_pattern else "",
+            "adresse": " ".join(text.split("à")[1:]).split("\n")[0] if "à" in text else ""
         }
 
-        print("Données extraites:", results)  # Debug
+        print("Données extraites :", results)  # Debug
 
         return jsonify(results)
 
