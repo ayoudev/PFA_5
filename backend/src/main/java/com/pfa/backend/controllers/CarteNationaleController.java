@@ -20,6 +20,20 @@ public class CarteNationaleController {
     @Autowired
     private CarteNationaleRepository repository;
 
+//    @PostMapping("/colab/process")
+//    public CarteNationale processColabImage(@RequestBody Map<String, String> data) {
+//        // Créer une entité CarteNationale à partir des données extraites
+//        CarteNationale carte = new CarteNationale();
+//        carte.setNom(data.get("nom"));
+//        carte.setPrenom(data.get("prenom"));
+//        carte.setNumeroCIN(data.get("numero_cin"));
+//        carte.setAdresse(data.get("adresse"));
+//        carte.setDateNaissance(data.get("date_naissance"));
+//
+//        // Sauvegarder dans la base de données
+//        return repository.save(carte);
+//    }
+
     @PostMapping("/process")
     public CarteNationale processImage(@RequestParam("file") MultipartFile file) {
         // Appeler le service pour extraire les données
@@ -36,6 +50,8 @@ public class CarteNationaleController {
         // Sauvegarder dans la base de données
         return repository.save(carte);
     }
+
+
 
     @GetMapping("/all")
     public List<CarteNationale> getAllCarteNationale() {
