@@ -24,27 +24,32 @@ def process_image():
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         mask = np.zeros_like(binary)
 
-        # Filtrer les contours par taille pour capturer les zones de texte pertinentes
         for cnt in contours:
             x, y, w, h = cv2.boundingRect(cnt)
-            if 50 < w < 1000 and 10 < h < 200:  # Seuils à ajuster selon les dimensions du texte
+            if 50 < w < 1000 and 10 < h < 200:  # Ajuster selon les dimensions du texte
                 mask[y:y + h, x:x + w] = 255
 
         filtered = cv2.bitwise_and(gray, gray, mask=mask)
 
-        # Étape 2 : OCR
+        # Étape 2 : OCR avec suppression du bruit
         custom_config = r'--oem 3 --psm 6'
-        text = pytesseract.image_to_string(filtered, lang="fra", config=custom_config)
+        raw_text = pytesseract.image_to_string(filtered, lang="fra", config=custom_config)
+
+        # Liste de mots-clés à ignorer
+        keywords_to_ignore = ["ROYAUME", "MAROC", "CARTE", "NATIONALE", "IDENTITE", "DE", "BEI", "PE"]
+
+        # Nettoyer le texte pour exclure le bruit
+        cleaned_text = "\n".join([line for line in raw_text.split("\n") if not any(keyword in line for keyword in keywords_to_ignore)])
 
         # Sauvegarde pour debug
-        with open("extracted_text_debug.txt", "w", encoding="utf-8") as f:
-            f.write(text)
-        print("Texte extrait par OCR :", text)  # Debug
+        with open("cleaned_text_debug.txt", "w", encoding="utf-8") as f:
+            f.write(cleaned_text)
+        print("Texte nettoyé :", cleaned_text)  # Debug
 
         # Étape 3 : Extraction des données avec regex
-        cin_pattern = re.search(r'[A-Z]{2}\d{6}', text)  # Format CIN
-        date_pattern = re.search(r'\d{2}.\d{2}.\d{4}', text)  # Format des dates
-        nom_prenom_pattern = re.findall(r'\b[A-Z]{2,}\b', text)  # Noms et prénoms en majuscules
+        cin_pattern = re.search(r'[A-Z]{2}\d{6}', cleaned_text)  # Format CIN
+        date_pattern = re.search(r'\d{2}[./-]\d{2}[./-]\d{4}', cleaned_text)  # Format des dates
+        nom_prenom_pattern = [word for word in re.findall(r'\b[A-Z]+\b', cleaned_text) if word not in keywords_to_ignore]
 
         # Structuration des résultats
         results = {
@@ -52,7 +57,7 @@ def process_image():
             "prenom": nom_prenom_pattern[0] if len(nom_prenom_pattern) > 0 else "",
             "date_naissance": date_pattern.group(0) if date_pattern else "",
             "numero_cin": cin_pattern.group(0) if cin_pattern else "",
-            "adresse": " ".join(text.split("à")[1:]).split("\n")[0] if "à" in text else ""
+            "adresse": " ".join(cleaned_text.split("à")[1:]).split("\n")[0] if "à" in cleaned_text else ""
         }
 
         print("Données extraites :", results)  # Debug
@@ -61,6 +66,7 @@ def process_image():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
