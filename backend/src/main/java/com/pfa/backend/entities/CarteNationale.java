@@ -29,7 +29,7 @@ public class CarteNationale {
     }
 
     public void setNom(String nom) {
-        this.nom = nom.replaceAll("[^\\p{IsLatin}]", ""); // Supprime les caractères non-latins
+        this.nom = (nom != null) ? nom.replaceAll("[^\\p{IsLatin}]", "") : null;
     }
 
     public String getPrenom() {
@@ -37,7 +37,7 @@ public class CarteNationale {
     }
 
     public void setPrenom(String prenom) {
-        this.prenom = prenom.replaceAll("[^\\p{IsLatin}]", ""); // Supprime les caractères non-latins
+        this.prenom = (prenom != null) ? prenom.replaceAll("[^\\p{IsLatin}]", "") : null;
     }
 
     public String getAdresse() {

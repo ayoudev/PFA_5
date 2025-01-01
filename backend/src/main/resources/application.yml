@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    username: root
+    url: jdbc:mysql://localhost:3306/pfa_5
+    password: Root123root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: hakmaoui01@gmail.com
+    password: tpsj hxux mxhv dmat
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
